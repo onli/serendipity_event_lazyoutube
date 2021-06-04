@@ -107,20 +107,23 @@ class serendipity_event_lazyoutube extends serendipity_event {
         //enable \ as escape-character:
         $text = str_replace('\[', chr(2), $text);
         $search = array(
-                        // [youtubelink]
-                        '/\[https:\/\/www\.youtube\.com\/watch\?v=([^ ]*?)\]/',
-                        // iframe embed                    optional privacy mode       #no params
-                        '/<iframe[^>]*https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\/([^ \&"\?]+)[^>]*><\/iframe>/',
+                        // iframe embed                    optional privacy mode       #videoid     #start time etc
+                        '/<iframe[^>]*https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\/([^ \&"\?]+)([^"]*)[^>]*><\/iframe>/',
                        );   
         $search_elements = count($search);
         for($i = 0; $i < $search_elements; $i++) {
             $text = preg_replace_callback($search[$i], function ($matches) {
                             $videoid = $matches[1];
+                            if (isset($matches[2]) && ! empty($matches[2])) {
+                                $params = $matches[2] . '&autoplay=1';
+                            } else {
+                                $params = '?autoplay=1';
+                            }
                             return '<iframe
                                 width="560"
                                 height="315"
-                                src="https://www.youtube.com/embed/' . $videoid .'"
-                                srcdoc="<style>*{padding:0;margin:0;overflow:hidden}html,body{height:100%}img,span{position:absolute;width:100%;top:0;bottom:0;margin:auto}span{height:1.5em;text-align:center;font:48px/1.5 sans-serif;color:white;text-shadow:0 0 0.5em black}</style><a href=https://www.youtube.com/embed/' . $videoid .'?autoplay=1><img src=https://img.youtube.com/vi/' . $videoid .'/hqdefault.jpg><span>▶</span></a>"
+                                src="https://www.youtube-nocookie.com/embed/' . $videoid .'"
+                                srcdoc="<style>*{padding:0;margin:0;overflow:hidden}html,body{height:100%}img,span{position:absolute;width:100%;top:0;bottom:0;margin:auto}span{height:1.5em;text-align:center;font:48px/1.5 sans-serif;color:white;text-shadow:0 0 0.5em black}</style><a href=https://www.youtube-nocookie.com/embed/' . $videoid . $params . '><img src=https://img.youtube.com/vi/' . $videoid .'/hqdefault.jpg><span>▶</span></a>"
                                 frameborder="0"
                                 allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
                                 allowfullscreen
