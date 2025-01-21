@@ -118,7 +118,7 @@ class serendipity_event_lazyoutube extends serendipity_event {
                             fwrite($fp, $image_data);
                             fclose($fp);
                         }
-                        # Now it exists, we can just redirect to it. The webserver should deliver it properly
+                        # Now it exists, we can output it. But we need to set the correct headers
                         $size = @getimagesize($cache_path);
                         $mime_type = $size['mime'];
                         header("Content-type: $mime_type");
