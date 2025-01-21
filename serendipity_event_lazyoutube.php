@@ -1,4 +1,4 @@
-<?php # $Id: serendipity_event_liquid.php 1528 2006-12-01 08:58:47Z garvinhicking $
+<?php
 
 if (IN_serendipity !== true) {
     die ("Don't hack!");
