@@ -57,6 +57,7 @@ class serendipity_event_lazyoutube extends serendipity_event {
 
     function install() {
         serendipity_plugin_api::hook_event('backend_cache_entries', $this->title);
+        $this->setupDB();
     }
 
     function uninstall(&$propbag) {
@@ -76,6 +77,15 @@ class serendipity_event_lazyoutube extends serendipity_event {
         $propbag->add('description', sprintf(APPLY_MARKUP_TO, constant($name)));
         $propbag->add('default', 'true');
         return true;
+    }
+
+    function setupDB() {
+        global $serendipity;
+        
+        $sql = "CREATE TABLE IF NOT EXISTS
+            {$serendipity['dbPrefix']}lazyoutube_whitelist
+            (videoid VARCHAR(20) NOT NULL UNIQUE);";
+        serendipity_db_schema_import($sql);
     }
 
 
@@ -104,11 +114,13 @@ class serendipity_event_lazyoutube extends serendipity_event {
                     }
                     if ($parts[0] == 'lazyoutubefetch') {
                         $videoid = $parts[1];
+                        if (! $this->on_whitelist($videoid)) {
+                            return false;
+                        }
                         $cache_path = $this->get_cache_path($videoid);
                         # Check if the thumbnail is already cached.
                         if (! file_exists($cache_path)) {
                             # If not we have to fetch and store it
-                            # TODO: Allow this only for whitelisted video ids
                             $thumbnail_url = 'https://img.youtube.com/vi/' . $videoid .'/hqdefault.jpg';
                             $image_data = serendipity_request_url($thumbnail_url);
                             if (! file_exists(dirname($cache_path))) {
@@ -119,6 +131,7 @@ class serendipity_event_lazyoutube extends serendipity_event {
                             fclose($fp);
                         }
                         # Now it exists, we can output it. But we need to set the correct headers
+                        # TODO: Test using a redirect instead
                         $size = @getimagesize($cache_path);
                         $mime_type = $size['mime'];
                         header("Content-type: $mime_type");
@@ -138,16 +151,19 @@ class serendipity_event_lazyoutube extends serendipity_event {
         }
     }
 
+    # The path where thumbnails are to be stored on disk
     function get_cache_path($videoid) {
         global $serendipity;
         return $serendipity['serendipityPath'] . PATH_SMARTY_COMPILE . '/serendipity_event_lazytube/' . $videoid .'.jpg';
     }
-    
+
+    # The web url to the stored thumbnail
     function get_cache_url($videoid) {
         global $serendipity;
         return $serendipity['baseURL'] . PATH_SMARTY_COMPILE . '/serendipity_event_lazytube/' . $videoid .'.jpg';
     }
 
+    # Pattern of plugin urls, used to trigger plugin events
     function getPermaPluginPath() {
         global $serendipity;
 
@@ -160,6 +176,54 @@ class serendipity_event_lazyoutube extends serendipity_event {
         return $pluginPath;
     }
 
+    # Add a videoid to the whitelist. Used when parsing videos, only whitelisted
+    # videoids are permitted for the thumbnail lookup. This will prevent potential abusers
+    # from triggering repeated queries to the Youtube server (since requests are cached).
+    function whitelist($videoid) {
+        global $serendipity;
+        $this->setupDB();
+
+        switch ($serendipity['dbType']) {
+            case 'mysql':
+            case 'mysqli':
+                $sql = "INSERT IGNORE INTO
+                {$serendipity['dbPrefix']}lazyoutube_whitelist
+                (videoid)
+                VALUES
+                (\"" . serendipity_db_escape_string($videoid) . "\");";
+                break;
+            case 'sqlite':
+            case 'sqlite3':
+            case 'pdo-sqlite':
+            case 'pdo-sqliteoo':
+                $sql = "INSERT OR IGNORE INTO
+                    {$serendipity['dbPrefix']}lazyoutube_whitelist
+                    (videoid)
+                    VALUES
+                    (\"" . serendipity_db_escape_string($videoid) . "\");";
+                break;
+            default:
+                # Postgres
+                 $sql = "INSERT INTO
+                    {$serendipity['dbPrefix']}lazyoutube_whitelist
+                    (videoid)
+                    VALUES
+                    (\"" . serendipity_db_escape_string($videoid) . "\") ON CONFLICT(videoid) DO NOTHING;";
+        }
+        serendipity_db_query($sql);
+    }
+
+    # Return true if the given videoid is on the whitelist, false otherwise
+    function on_whitelist($videoid) {
+        global $serendipity;
+
+        $sql = "SELECT videoid FROM 
+            {$serendipity['dbPrefix']}lazyoutube_whitelist
+            WHERE videoid = \"" . serendipity_db_escape_string($videoid) . "\";";
+
+        $found = serendipity_db_query($sql, true);
+        return (count($found) > 0);
+    }
 
     # Replaces the regular YouTube iframe with a simple thumbnail
     function apply_markup($text) {
@@ -179,7 +243,8 @@ class serendipity_event_lazyoutube extends serendipity_event {
                             } else {
                                 $params = '?autoplay=1';
                             }
-                            # TODO: Whitelist this videoid
+                            # We need to whitelist the videoid first, otherwise the proxied lookup will not work
+                            $this->whitelist($videoid);
                             $proxy_url = $serendipity['baseURL'] . $serendipity['indexFile'] . '?/' . $this->getPermaPluginPath() . '/lazyoutubefetch_' . $videoid;
                             return '<iframe
                                 width="560"
