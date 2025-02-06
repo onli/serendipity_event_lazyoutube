@@ -1,3 +1,5 @@
+This plugin is now a part of the Spartacus plugin collection. All further development should happen [there](https://github.com/s9y/additional_plugins/tree/master/serendipity_event_lazyoutube).
+
 # serendipity_event_lazyoutube
 This plugin automatically replaces Youtube embeds with a faster alternative. The YouTube iframe gets replaced with a new iframe, one that does not load any code until the users clicks on the preview image.
 
